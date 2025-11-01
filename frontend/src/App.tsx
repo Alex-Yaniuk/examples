@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import './App.css'
+import { Box, Button, Container, Paper, Stack, Typography, Alert } from '@mui/material'
 
 function App() {
   const [email, setEmail] = useState<string | null>(null)
@@ -215,29 +215,41 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <main className="panel">
-        <h1 className="title">Sign in</h1>
-        {!clientId && (
-          <p className="hint">
-            Configure <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
-          </p>
-        )}
-        {email ? (
-          <div className="signed-in">
-            <div className="details">
-              <span className="label">Signed in as</span>
-              <span className="email">{email}</span>
-            </div>
-            <button type="button" className="sign-out" onClick={handleSignOut}>
-              Sign out
-            </button>
-          </div>
-        ) : (
-          <div className="button-container" ref={buttonContainerRef} />
-        )}
-      </main>
-    </div>
+    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: (t) => t.palette.mode === 'dark' ? 'background.default' : '#f5f5f5', p: 3 }}>
+      <Container maxWidth="xs">
+        <Paper elevation={8} sx={{ borderRadius: 3, p: 3 }}>
+          <Stack spacing={2} alignItems="stretch">
+            <Typography component="h1" variant="h5" textAlign="center" fontWeight={600}>
+              Sign in
+            </Typography>
+
+            {!clientId && (
+              <Alert severity="info" sx={{ textAlign: 'center' }}>
+                Configure <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
+              </Alert>
+            )}
+
+            {email ? (
+              <Stack spacing={2} alignItems="center">
+                <Stack spacing={0.5} alignItems="center">
+                  <Typography variant="overline" color="text.secondary">
+                    Signed in as
+                  </Typography>
+                  <Typography variant="subtitle1" fontWeight={500} textAlign="center" sx={{ wordBreak: 'break-all' }}>
+                    {email}
+                  </Typography>
+                </Stack>
+                <Button variant="contained" color="inherit" onClick={handleSignOut} sx={{ borderRadius: 99 }}>
+                  Sign out
+                </Button>
+              </Stack>
+            ) : (
+              <Box ref={buttonContainerRef} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 48 }} />
+            )}
+          </Stack>
+        </Paper>
+      </Container>
+    </Box>
   )
 }
 
