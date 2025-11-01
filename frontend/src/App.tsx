@@ -110,37 +110,10 @@ function App() {
       clearGoogleButton()
       window.google.accounts.id.initialize({
         client_id: clientId,
-        callback: (credentialResponse: CredentialResponse) => {
-          if (!credentialResponse.credential) {
-            return
-          }
-
-          const payload = parseJwt(credentialResponse.credential)
-          if (!payload?.email) {
-            return
-          }
-
-          setEmail(payload.email)
-
-          try {
-            window.localStorage.setItem(
-              PROFILE_STORAGE_KEY,
-              JSON.stringify({ email: payload.email } as StoredProfile)
-            )
-          } catch (error) {
-            console.warn('Unable to persist Google profile', error)
-          }
-        },
+        callback: handleCredentialResponse,
       })
 
-      if (!email) {
-        window.google.accounts.id.renderButton(buttonContainerRef.current, {
-          theme: 'outline',
-          size: 'large',
-          type: 'standard',
-        })
-        window.google.accounts.id.prompt()
-      }
+      setIsGoogleReady(true)
     }
 
     const attachLoadHandler = (script: HTMLScriptElement) => {
@@ -191,6 +164,7 @@ function App() {
     return () => {
       cancelled = true
       cleanupLoad?.()
+      setIsGoogleReady(false)
       clearGoogleButton()
     }
   }, [clearGoogleButton, clientId, handleCredentialResponse])
@@ -201,6 +175,9 @@ function App() {
     }
 
     const container = buttonContainerRef.current
+    if (!container) {
+      return
+    }
 
     if (email) {
       clearGoogleButton()
@@ -224,14 +201,6 @@ function App() {
       clearGoogleButton()
     }
   }, [clearGoogleButton, email, isGoogleReady])
-
-  const handleSignOut = () => {
-    try {
-      window.localStorage.removeItem(PROFILE_STORAGE_KEY)
-    } catch (error) {
-      console.warn('Unable to clear stored Google profile', error)
-    }
-  }, [clientId, email])
 
   const handleSignOut = () => {
     try {
