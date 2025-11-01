@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Box, Button, Container, Paper, Stack, Typography, Alert } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
 
 function App() {
   const [email, setEmail] = useState<string | null>(null)
   const [isGoogleReady, setIsGoogleReady] = useState(false)
+  const [scriptError, setScriptError] = useState<string | null>(null)
+  const [promptInfo, setPromptInfo] = useState<string | null>(null)
+  const retryRef = useRef<number>(0)
   const buttonContainerRef = useRef<HTMLDivElement | null>(null)
   const hasRenderedButton = useRef(false)
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+  const theme = useTheme()
 
   const clearGoogleButton = useCallback(() => {
     const container = buttonContainerRef.current
@@ -51,38 +56,11 @@ function App() {
 
     try {
       const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
-      if (!storedProfile) {
-        return
-      }
-
-      const profile: StoredProfile = JSON.parse(storedProfile)
-      if (profile?.email) {
-        setEmail(profile.email)
-      }
-    } catch (error) {
-      console.warn('Unable to restore stored Google profile', error)
-      try {
-        window.localStorage.removeItem(PROFILE_STORAGE_KEY)
-      } catch (cleanupError) {
-        console.warn('Unable to clear invalid stored Google profile', cleanupError)
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    try {
-      const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
-      if (!storedProfile) {
-        return
-      }
-
-      const profile: StoredProfile = JSON.parse(storedProfile)
-      if (profile?.email) {
-        setEmail(profile.email)
+      if (storedProfile) {
+        const profile: StoredProfile = JSON.parse(storedProfile)
+        if (profile?.email) {
+          setEmail(profile.email)
+        }
       }
     } catch (error) {
       console.warn('Unable to restore stored Google profile', error)
@@ -114,6 +92,7 @@ function App() {
       })
 
       setIsGoogleReady(true)
+      setScriptError(null)
     }
 
     const attachLoadHandler = (script: HTMLScriptElement) => {
@@ -154,9 +133,26 @@ function App() {
     } else {
       const script = document.createElement('script')
       script.id = SCRIPT_ID
-      script.src = 'https://accounts.google.com/gsi/client'
+      const lang = (navigator.language || 'en').split('-')[0]
+      script.src = `https://accounts.google.com/gsi/client?hl=${encodeURIComponent(lang)}`
       script.async = true
       script.defer = true
+      script.addEventListener('error', () => {
+        if (cancelled) return
+        setScriptError('Failed to load Google services. Check your connection and try again.')
+        const retries = Math.min(retryRef.current + 1, 3)
+        retryRef.current = retries
+        const backoff = Math.pow(2, retries) * 500
+        setTimeout(() => {
+          if (!document.getElementById(SCRIPT_ID)) {
+            document.head.appendChild(script)
+          } else {
+            // Force reload by replacing the element
+            document.getElementById(SCRIPT_ID)?.remove()
+            document.head.appendChild(script)
+          }
+        }, backoff)
+      })
       cleanupLoad = attachLoadHandler(script)
       document.head.appendChild(script)
     }
@@ -190,17 +186,25 @@ function App() {
 
     clearGoogleButton()
     window.google.accounts.id.renderButton(container, {
-      theme: 'outline',
+      theme: theme.palette.mode === 'dark' ? 'filled_black' : 'filled_blue',
       size: 'large',
       type: 'standard',
     })
-    window.google.accounts.id.prompt()
+    window.google.accounts.id.prompt((n) => {
+      if (n.isNotDisplayed()) {
+        setPromptInfo(`Google One Tap not displayed: ${n.getDismissedReason?.() || 'unknown reason'}`)
+      } else if (n.isDismissedMoment()) {
+        setPromptInfo(`Google One Tap dismissed: ${n.getDismissedReason?.() || 'user dismissed'}`)
+      } else if (n.isDisplayed()) {
+        setPromptInfo(null)
+      }
+    })
     hasRenderedButton.current = true
 
     return () => {
       clearGoogleButton()
     }
-  }, [clearGoogleButton, email, isGoogleReady])
+  }, [clearGoogleButton, email, isGoogleReady, theme.palette.mode])
 
   const handleSignOut = () => {
     try {
@@ -227,6 +231,26 @@ function App() {
               <Alert severity="info" sx={{ textAlign: 'center' }}>
                 Configure <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
               </Alert>
+            )}
+
+            {scriptError && (
+              <Alert severity="error" action={
+                <Button color="inherit" size="small" onClick={() => {
+                  setScriptError(null)
+                  const el = document.getElementById(SCRIPT_ID)
+                  if (el) el.remove()
+                  setIsGoogleReady(false)
+                  hasRenderedButton.current = false
+                }}>
+                  Retry
+                </Button>
+              }>
+                {scriptError}
+              </Alert>
+            )}
+
+            {promptInfo && !email && (
+              <Alert severity="warning">{promptInfo}</Alert>
             )}
 
             {email ? (
