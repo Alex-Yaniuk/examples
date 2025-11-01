@@ -8,6 +8,16 @@ function App() {
   const hasRenderedButton = useRef(false)
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
+  const clearGoogleButton = useCallback(() => {
+    const container = buttonContainerRef.current
+    if (!container) {
+      return
+    }
+
+    container.innerHTML = ''
+    hasRenderedButton.current = false
+  }, [])
+
   const handleCredentialResponse = useCallback(
     (credentialResponse: CredentialResponse) => {
       if (!credentialResponse.credential) {
@@ -20,6 +30,7 @@ function App() {
       }
 
       setEmail(payload.email)
+      clearGoogleButton()
 
       try {
         window.localStorage.setItem(
@@ -30,7 +41,7 @@ function App() {
         console.warn('Unable to persist Google profile', error)
       }
     },
-    [setEmail]
+    [clearGoogleButton]
   )
 
   useEffect(() => {
@@ -71,6 +82,7 @@ function App() {
         return
       }
 
+      clearGoogleButton()
       window.google.accounts.id.initialize({
         client_id: clientId,
         callback: handleCredentialResponse,
@@ -127,8 +139,9 @@ function App() {
     return () => {
       cancelled = true
       cleanupLoad?.()
+      clearGoogleButton()
     }
-  }, [clientId, handleCredentialResponse])
+  }, [clearGoogleButton, clientId, handleCredentialResponse])
 
   useEffect(() => {
     if (!isGoogleReady || !buttonContainerRef.current || !window.google?.accounts?.id) {
@@ -138,8 +151,7 @@ function App() {
     const container = buttonContainerRef.current
 
     if (email) {
-      container.innerHTML = ''
-      hasRenderedButton.current = false
+      clearGoogleButton()
       return
     }
 
@@ -147,7 +159,7 @@ function App() {
       return
     }
 
-    container.innerHTML = ''
+    clearGoogleButton()
     window.google.accounts.id.renderButton(container, {
       theme: 'outline',
       size: 'large',
@@ -157,10 +169,9 @@ function App() {
     hasRenderedButton.current = true
 
     return () => {
-      container.innerHTML = ''
-      hasRenderedButton.current = false
+      clearGoogleButton()
     }
-  }, [email, isGoogleReady])
+  }, [clearGoogleButton, email, isGoogleReady])
 
   const handleSignOut = () => {
     try {
@@ -169,6 +180,7 @@ function App() {
       console.warn('Unable to clear stored Google profile', error)
     }
 
+    clearGoogleButton()
     setEmail(null)
     window.google?.accounts.id.disableAutoSelect()
     window.google?.accounts.id.cancel()
