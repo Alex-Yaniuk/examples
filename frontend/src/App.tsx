@@ -3,7 +3,26 @@ import { Box, Button, Container, Paper, Stack, Typography, Alert } from '@mui/ma
 import { useTheme } from '@mui/material/styles'
 
 function App() {
-  const [email, setEmail] = useState<string | null>(null)
+  const [email, setEmail] = useState<string | null>(() => {
+    if (typeof window === 'undefined') {
+      return null
+    }
+    try {
+      const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
+      if (!storedProfile) {
+        return null
+      }
+      const profile: StoredProfile = JSON.parse(storedProfile)
+      return profile?.email ?? null
+    } catch {
+      try {
+        window.localStorage.removeItem(PROFILE_STORAGE_KEY)
+      } catch {
+        // ignore cleanup errors
+      }
+      return null
+    }
+  })
   const [isGoogleReady, setIsGoogleReady] = useState(false)
   const [scriptError, setScriptError] = useState<string | null>(null)
   const [promptInfo, setPromptInfo] = useState<string | null>(null)
@@ -49,28 +68,7 @@ function App() {
     [clearGoogleButton]
   )
 
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    try {
-      const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
-      if (storedProfile) {
-        const profile: StoredProfile = JSON.parse(storedProfile)
-        if (profile?.email) {
-          setEmail(profile.email)
-        }
-      }
-    } catch (error) {
-      console.warn('Unable to restore stored Google profile', error)
-      try {
-        window.localStorage.removeItem(PROFILE_STORAGE_KEY)
-      } catch (cleanupError) {
-        console.warn('Unable to clear invalid stored Google profile', cleanupError)
-      }
-    }
-  }, [])
+  // Profile restoration is handled in useState initializer to avoid setState in effects.
 
   useEffect(() => {
     if (!clientId) {
