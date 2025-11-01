@@ -1,0 +1,10 @@
+{
+  "name": "@emotion/react",
+  "version": "11.13.5",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "peerDependencies": {
+    "react": ">=18"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@mui/material",
+  "version": "6.1.4",
+  "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  }
+}
