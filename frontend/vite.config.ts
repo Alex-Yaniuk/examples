@@ -5,4 +5,9 @@ import react from '@vitejs/plugin-react-swc'
 export default defineConfig({
   base: '/examples/',
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@mui/material': '/src/mui/material.tsx',
+    },
+  },
 })

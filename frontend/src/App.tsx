@@ -205,17 +205,15 @@ function App() {
         alignItems: 'center',
         justifyContent: 'center',
         background: 'radial-gradient(circle at 10% 20%, #f5f5f5 0%, #e3e3e3 100%)',
-        py: { xs: 6, sm: 8 },
-        px: 2,
+        padding: '6rem 1.5rem',
       }}
     >
       <Container maxWidth="sm">
         <Paper
           elevation={12}
           sx={{
-            borderRadius: 4,
-            px: { xs: 3, sm: 6 },
-            py: { xs: 4, sm: 6 },
+            borderRadius: '32px',
+            padding: '3rem clamp(2rem, 5vw, 3rem)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'stretch',
@@ -232,7 +230,7 @@ function App() {
             )}
             {email ? (
               <Stack spacing={3} alignItems="center">
-                <Stack spacing={0.5} textAlign="center">
+              <Stack spacing={0.5} sx={{ textAlign: 'center' }}>
                   <Typography variant="overline" color="text.secondary" letterSpacing={2}>
                     Signed in as
                   </Typography>
@@ -246,7 +244,7 @@ function App() {
                   color="primary"
                   size="large"
                   onClick={handleSignOut}
-                  sx={{ borderRadius: 999 }}
+                  sx={{ borderRadius: '999px' }}
                 >
                   Sign out
                 </Button>
