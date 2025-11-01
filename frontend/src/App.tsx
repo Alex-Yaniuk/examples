@@ -70,6 +70,31 @@ function App() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    try {
+      const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
+      if (!storedProfile) {
+        return
+      }
+
+      const profile: StoredProfile = JSON.parse(storedProfile)
+      if (profile?.email) {
+        setEmail(profile.email)
+      }
+    } catch (error) {
+      console.warn('Unable to restore stored Google profile', error)
+      try {
+        window.localStorage.removeItem(PROFILE_STORAGE_KEY)
+      } catch (cleanupError) {
+        console.warn('Unable to clear invalid stored Google profile', cleanupError)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (!clientId) {
       console.warn('Missing VITE_GOOGLE_CLIENT_ID environment variable for Google OAuth')
       return
@@ -85,10 +110,37 @@ function App() {
       clearGoogleButton()
       window.google.accounts.id.initialize({
         client_id: clientId,
-        callback: handleCredentialResponse,
+        callback: (credentialResponse: CredentialResponse) => {
+          if (!credentialResponse.credential) {
+            return
+          }
+
+          const payload = parseJwt(credentialResponse.credential)
+          if (!payload?.email) {
+            return
+          }
+
+          setEmail(payload.email)
+
+          try {
+            window.localStorage.setItem(
+              PROFILE_STORAGE_KEY,
+              JSON.stringify({ email: payload.email } as StoredProfile)
+            )
+          } catch (error) {
+            console.warn('Unable to persist Google profile', error)
+          }
+        },
       })
 
-      setIsGoogleReady(true)
+      if (!email) {
+        window.google.accounts.id.renderButton(buttonContainerRef.current, {
+          theme: 'outline',
+          size: 'large',
+          type: 'standard',
+        })
+        window.google.accounts.id.prompt()
+      }
     }
 
     const attachLoadHandler = (script: HTMLScriptElement) => {
@@ -179,8 +231,15 @@ function App() {
     } catch (error) {
       console.warn('Unable to clear stored Google profile', error)
     }
+  }, [clientId, email])
 
-    clearGoogleButton()
+  const handleSignOut = () => {
+    try {
+      window.localStorage.removeItem(PROFILE_STORAGE_KEY)
+    } catch (error) {
+      console.warn('Unable to clear stored Google profile', error)
+    }
+
     setEmail(null)
     window.google?.accounts.id.disableAutoSelect()
     window.google?.accounts.id.cancel()
