@@ -11,3 +11,6 @@ updates:
           - "react-dom"
           - "@types/react"
           - "@types/react-dom"
+      mui:
+        patterns:
+          - "@mui/*"

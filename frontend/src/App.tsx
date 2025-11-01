@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import './App.css'
+import {
+  Alert,
+  Box,
+  Button,
+  Container,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material'
 
 function App() {
   const [email, setEmail] = useState<string | null>(null)
@@ -43,31 +51,6 @@ function App() {
     },
     [clearGoogleButton]
   )
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    try {
-      const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
-      if (!storedProfile) {
-        return
-      }
-
-      const profile: StoredProfile = JSON.parse(storedProfile)
-      if (profile?.email) {
-        setEmail(profile.email)
-      }
-    } catch (error) {
-      console.warn('Unable to restore stored Google profile', error)
-      try {
-        window.localStorage.removeItem(PROFILE_STORAGE_KEY)
-      } catch (cleanupError) {
-        console.warn('Unable to clear invalid stored Google profile', cleanupError)
-      }
-    }
-  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -210,34 +193,80 @@ function App() {
     }
 
     setEmail(null)
-    window.google?.accounts.id.disableAutoSelect()
-    window.google?.accounts.id.cancel()
+    const googleAccountsId = window.google?.accounts?.id
+    googleAccountsId?.disableAutoSelect()
+    googleAccountsId?.cancel()
   }
 
   return (
-    <div className="app">
-      <main className="panel">
-        <h1 className="title">Sign in</h1>
-        {!clientId && (
-          <p className="hint">
-            Configure <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
-          </p>
-        )}
-        {email ? (
-          <div className="signed-in">
-            <div className="details">
-              <span className="label">Signed in as</span>
-              <span className="email">{email}</span>
-            </div>
-            <button type="button" className="sign-out" onClick={handleSignOut}>
-              Sign out
-            </button>
-          </div>
-        ) : (
-          <div className="button-container" ref={buttonContainerRef} />
-        )}
-      </main>
-    </div>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'radial-gradient(circle at 10% 20%, #f5f5f5 0%, #e3e3e3 100%)',
+        py: { xs: 6, sm: 8 },
+        px: 2,
+      }}
+    >
+      <Container maxWidth="sm">
+        <Paper
+          elevation={12}
+          sx={{
+            borderRadius: 4,
+            px: { xs: 3, sm: 6 },
+            py: { xs: 4, sm: 6 },
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'stretch',
+          }}
+        >
+          <Stack spacing={3} alignItems="stretch">
+            <Typography component="h1" variant="h4" textAlign="center" fontWeight={600}>
+              Sign in
+            </Typography>
+            {!clientId && (
+              <Alert severity="info" variant="outlined" sx={{ textAlign: 'center' }}>
+                Configure <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
+              </Alert>
+            )}
+            {email ? (
+              <Stack spacing={3} alignItems="center">
+                <Stack spacing={0.5} textAlign="center">
+                  <Typography variant="overline" color="text.secondary" letterSpacing={2}>
+                    Signed in as
+                  </Typography>
+                  <Typography variant="body1" fontWeight={600} sx={{ wordBreak: 'break-word' }}>
+                    {email}
+                  </Typography>
+                </Stack>
+                <Button
+                  type="button"
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  onClick={handleSignOut}
+                  sx={{ borderRadius: 999 }}
+                >
+                  Sign out
+                </Button>
+              </Stack>
+            ) : (
+              <Box
+                ref={buttonContainerRef}
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  minHeight: 48,
+                }}
+              />
+            )}
+          </Stack>
+        </Paper>
+      </Container>
+    </Box>
   )
 }
 
