@@ -1,10 +1,61 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import './App.css'
 
 function App() {
   const [email, setEmail] = useState<string | null>(null)
+  const [isGoogleReady, setIsGoogleReady] = useState(false)
   const buttonContainerRef = useRef<HTMLDivElement | null>(null)
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+
+  const handleCredentialResponse = useCallback(
+    (credentialResponse: CredentialResponse) => {
+      if (!credentialResponse.credential) {
+        return
+      }
+
+      const payload = parseJwt(credentialResponse.credential)
+      if (!payload?.email) {
+        return
+      }
+
+      setEmail(payload.email)
+
+      try {
+        window.localStorage.setItem(
+          PROFILE_STORAGE_KEY,
+          JSON.stringify({ email: payload.email } as StoredProfile)
+        )
+      } catch (error) {
+        console.warn('Unable to persist Google profile', error)
+      }
+    },
+    [setEmail]
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    try {
+      const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
+      if (!storedProfile) {
+        return
+      }
+
+      const profile: StoredProfile = JSON.parse(storedProfile)
+      if (profile?.email) {
+        setEmail(profile.email)
+      }
+    } catch (error) {
+      console.warn('Unable to restore stored Google profile', error)
+      try {
+        window.localStorage.removeItem(PROFILE_STORAGE_KEY)
+      } catch (cleanupError) {
+        console.warn('Unable to clear invalid stored Google profile', cleanupError)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!clientId) {
@@ -12,90 +63,102 @@ function App() {
       return
     }
 
+    let cancelled = false
+
     const initializeGoogle = () => {
-      if (!window.google || !buttonContainerRef.current) {
+      if (cancelled || !window.google?.accounts?.id) {
         return
       }
 
-      buttonContainerRef.current.innerHTML = ''
-
       window.google.accounts.id.initialize({
         client_id: clientId,
-        callback: (credentialResponse: CredentialResponse) => {
-          if (!credentialResponse.credential) {
-            return
-          }
-
-          const payload = parseJwt(credentialResponse.credential)
-          if (payload?.email) {
-            setEmail(payload.email)
-          }
-        },
+        callback: handleCredentialResponse,
       })
 
-      window.google.accounts.id.renderButton(buttonContainerRef.current, {
-        theme: 'outline',
-        size: 'large',
-        type: 'standard',
-      })
+      setIsGoogleReady(true)
     }
 
-    if (window.google) {
+    const attachLoadHandler = (script: HTMLScriptElement) => {
+      const onLoad = () => {
+        if (cancelled) {
+          return
+        }
+
+        script.dataset.loaded = 'true'
+        initializeGoogle()
+      }
+
+      if (script.dataset.loaded === 'true') {
+        initializeGoogle()
+        return undefined
+      }
+
+      script.addEventListener('load', onLoad, { once: true })
+
+      return () => {
+        script.removeEventListener('load', onLoad)
+      }
+    }
+
+    if (window.google?.accounts?.id) {
       initializeGoogle()
       return () => {
-        if (buttonContainerRef.current) {
-          buttonContainerRef.current.innerHTML = ''
-        }
+        cancelled = true
       }
     }
 
     const existingScript = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null
 
-    if (!existingScript) {
+    let cleanupLoad: (() => void) | undefined
+
+    if (existingScript) {
+      cleanupLoad = attachLoadHandler(existingScript)
+    } else {
       const script = document.createElement('script')
       script.id = SCRIPT_ID
       script.src = 'https://accounts.google.com/gsi/client'
       script.async = true
       script.defer = true
-      script.onload = () => {
-        script.dataset.loaded = 'true'
-        initializeGoogle()
-      }
+      cleanupLoad = attachLoadHandler(script)
       document.head.appendChild(script)
-
-      return () => {
-        script.onload = null
-        if (buttonContainerRef.current) {
-          buttonContainerRef.current.innerHTML = ''
-        }
-      }
-    }
-
-    if (existingScript.dataset.loaded === 'true') {
-      existingScript.dataset.loaded = 'true'
-      initializeGoogle()
-    } else {
-      const handleLoad = () => {
-        existingScript.dataset.loaded = 'true'
-        initializeGoogle()
-      }
-
-      existingScript.addEventListener('load', handleLoad, { once: true })
-
-      return () => {
-        existingScript.removeEventListener('load', handleLoad)
-        if (buttonContainerRef.current) {
-          buttonContainerRef.current.innerHTML = ''
-        }
-      }
     }
 
     return () => {
-      if (buttonContainerRef.current) {
-        buttonContainerRef.current.innerHTML = ''
-      }
+      cancelled = true
+      cleanupLoad?.()
     }
-  }, [clientId])
+  }, [clientId, handleCredentialResponse])
+
+  useEffect(() => {
+    if (!isGoogleReady || email || !buttonContainerRef.current || !window.google?.accounts?.id) {
+      return
+    }
+
+    const container = buttonContainerRef.current
+
+    if (container.childElementCount > 0) {
+      return
+    }
+
+    window.google.accounts.id.renderButton(container, {
+      theme: 'outline',
+      size: 'large',
+      type: 'standard',
+    })
+    window.google.accounts.id.prompt()
+  }, [email, isGoogleReady])
+
+  const handleSignOut = () => {
+    try {
+      window.localStorage.removeItem(PROFILE_STORAGE_KEY)
+    } catch (error) {
+      console.warn('Unable to clear stored Google profile', error)
+    }
+
+    setEmail(null)
+    window.google?.accounts.id.disableAutoSelect()
+    window.google?.accounts.id.cancel()
+  }
 
   return (
     <div className="app">
@@ -107,9 +170,14 @@ function App() {
           </p>
         )}
         {email ? (
-          <div className="details">
-            <span className="label">Signed in as</span>
-            <span className="email">{email}</span>
+          <div className="signed-in">
+            <div className="details">
+              <span className="label">Signed in as</span>
+              <span className="email">{email}</span>
+            </div>
+            <button type="button" className="sign-out" onClick={handleSignOut}>
+              Sign out
+            </button>
           </div>
         ) : (
           <div className="button-container" ref={buttonContainerRef} />
@@ -120,6 +188,10 @@ function App() {
 }
 
 export default App
+
+type StoredProfile = {
+  email: string
+}
 
 type JwtPayload = {
   email?: string
@@ -146,6 +218,7 @@ function parseJwt(token: string): JwtPayload | null {
 }
 
 const SCRIPT_ID = 'google-oauth'
+const PROFILE_STORAGE_KEY = 'google-profile'
 
 type CredentialResponse = {
   credential: string
@@ -155,6 +228,9 @@ type CredentialResponse = {
 type GoogleId = {
   initialize(options: { client_id: string; callback: (response: CredentialResponse) => void }): void
   renderButton(parent: HTMLElement, options: { theme?: string; size?: string; type?: string }): void
+  prompt(momentListener?: (notification: PromptMomentNotification) => void): void
+  disableAutoSelect(): void
+  cancel(): void
 }
 
 type GoogleAccounts = {
@@ -163,6 +239,14 @@ type GoogleAccounts = {
 
 type GoogleNamespace = {
   accounts: GoogleAccounts
+}
+
+type PromptMomentNotification = {
+  isDismissedMoment(): boolean
+  isDisplayed(): boolean
+  isNotDisplayed(): boolean
+  getDismissedReason(): string
+  getMomentType(): string
 }
 
 declare global {
