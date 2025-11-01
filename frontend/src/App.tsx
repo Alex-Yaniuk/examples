@@ -7,28 +7,6 @@ function App() {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return
-    }
-
-    try {
-      const storedCredential = window.localStorage.getItem(STORAGE_KEY)
-      if (!storedCredential) {
-        return
-      }
-
-      const payload = parseJwt(storedCredential)
-      if (payload?.email && !isCredentialExpired(payload)) {
-        setEmail(payload.email)
-      } else {
-        window.localStorage.removeItem(STORAGE_KEY)
-      }
-    } catch (error) {
-      console.warn('Unable to access stored Google credentials', error)
-    }
-  }, [])
-
-  useEffect(() => {
     if (!clientId) {
       console.warn('Missing VITE_GOOGLE_CLIENT_ID environment variable for Google OAuth')
       return
@@ -49,27 +27,11 @@ function App() {
           }
 
           const payload = parseJwt(credentialResponse.credential)
-          if (payload?.email && !isCredentialExpired(payload)) {
-            try {
-              window.localStorage.setItem(STORAGE_KEY, credentialResponse.credential)
-            } catch (error) {
-              console.warn('Unable to persist Google credential', error)
-            }
-
+          if (payload?.email) {
             setEmail(payload.email)
-          } else {
-            try {
-              window.localStorage.removeItem(STORAGE_KEY)
-            } catch (error) {
-              console.warn('Unable to clear invalid Google credential', error)
-            }
           }
         },
       })
-
-      if (email) {
-        return
-      }
 
       window.google.accounts.id.renderButton(buttonContainerRef.current, {
         theme: 'outline',
@@ -133,18 +95,7 @@ function App() {
         buttonContainerRef.current.innerHTML = ''
       }
     }
-  }, [clientId, email])
-
-  const handleSignOut = () => {
-    try {
-      window.localStorage.removeItem(STORAGE_KEY)
-    } catch (error) {
-      console.warn('Unable to clear stored Google credential', error)
-    }
-
-    setEmail(null)
-    window.google?.accounts.id.disableAutoSelect()
-  }
+  }, [clientId])
 
   return (
     <div className="app">
@@ -156,14 +107,9 @@ function App() {
           </p>
         )}
         {email ? (
-          <div className="signed-in">
-            <div className="details">
-              <span className="label">Signed in as</span>
-              <span className="email">{email}</span>
-            </div>
-            <button type="button" className="sign-out" onClick={handleSignOut}>
-              Sign out
-            </button>
+          <div className="details">
+            <span className="label">Signed in as</span>
+            <span className="email">{email}</span>
           </div>
         ) : (
           <div className="button-container" ref={buttonContainerRef} />
@@ -177,16 +123,6 @@ export default App
 
 type JwtPayload = {
   email?: string
-  exp?: number
-}
-
-function isCredentialExpired(payload: JwtPayload | null): boolean {
-  if (!payload?.exp) {
-    return false
-  }
-
-  const expirationMs = payload.exp * 1000
-  return Number.isFinite(expirationMs) && expirationMs <= Date.now()
 }
 
 function parseJwt(token: string): JwtPayload | null {
@@ -210,7 +146,6 @@ function parseJwt(token: string): JwtPayload | null {
 }
 
 const SCRIPT_ID = 'google-oauth'
-const STORAGE_KEY = 'google-credential'
 
 type CredentialResponse = {
   credential: string
@@ -220,7 +155,6 @@ type CredentialResponse = {
 type GoogleId = {
   initialize(options: { client_id: string; callback: (response: CredentialResponse) => void }): void
   renderButton(parent: HTMLElement, options: { theme?: string; size?: string; type?: string }): void
-  disableAutoSelect(): void
 }
 
 type GoogleAccounts = {
