@@ -4,6 +4,8 @@ permissions:
 
 on:
   pull_request:
+    branches:
+      - main
     paths:
       - 'frontend/**'
       - '.github/workflows/frontend-pr-verification.yml'
