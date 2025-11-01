@@ -30,5 +30,13 @@ export default [
       ...reactHooks.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }]
     }
+  },
+  {
+    files: ['**/*.config.{js,ts}', 'eslint.config.js'],
+    languageOptions: {
+      globals: {
+        ...globals.node
+      }
+    }
   }
 ]
