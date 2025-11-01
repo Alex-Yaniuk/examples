@@ -11,3 +11,21 @@ updates:
           - "react-dom"
           - "@types/react"
           - "@types/react-dom"
+      mui:
+        patterns:
+          - "@mui/*"
+          - "@fontsource/*"
+      emotion:
+        patterns:
+          - "@emotion/*"
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
+      eslint-and-typescript:
+        patterns:
+          - "eslint"
+          - "eslint-*"
+          - "eslint-plugin-*"
+          - "@typescript-eslint/*"
+          - "typescript"
