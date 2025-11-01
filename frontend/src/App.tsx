@@ -1,344 +1,105 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Box, Button, Container, Paper, Stack, Typography, Alert } from '@mui/material'
-import { useTheme } from '@mui/material/styles'
+import { useRef } from 'react'
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Paper,
+  Stack,
+  Typography,
+} from '@mui/material'
+import { useGoogleSignIn } from './features/auth/useGoogleSignIn'
+
+const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
 function App() {
-  const [email, setEmail] = useState<string | null>(() => {
-    if (typeof window === 'undefined') {
-      return null
-    }
-    try {
-      const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
-      if (!storedProfile) {
-        return null
-      }
-      const profile: StoredProfile = JSON.parse(storedProfile)
-      return profile?.email ?? null
-    } catch {
-      try {
-        window.localStorage.removeItem(PROFILE_STORAGE_KEY)
-      } catch {
-        // ignore cleanup errors
-      }
-      return null
-    }
+  const buttonContainerRef = useRef<HTMLDivElement>(null)
+  const { email, status, error, signOut, retry } = useGoogleSignIn({
+    clientId,
+    buttonContainer: buttonContainerRef,
   })
-  const [isGoogleReady, setIsGoogleReady] = useState(false)
-  const [scriptError, setScriptError] = useState<string | null>(null)
-  const [promptInfo, setPromptInfo] = useState<string | null>(null)
-  const retryRef = useRef<number>(0)
-  const buttonContainerRef = useRef<HTMLDivElement | null>(null)
-  const hasRenderedButton = useRef(false)
-  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  const theme = useTheme()
-
-  const clearGoogleButton = useCallback(() => {
-    const container = buttonContainerRef.current
-    if (!container) {
-      return
-    }
-
-    container.innerHTML = ''
-    hasRenderedButton.current = false
-  }, [])
-
-  const handleCredentialResponse = useCallback(
-    (credentialResponse: CredentialResponse) => {
-      if (!credentialResponse.credential) {
-        return
-      }
-
-      const payload = parseJwt(credentialResponse.credential)
-      if (!payload?.email) {
-        return
-      }
-
-      setEmail(payload.email)
-      clearGoogleButton()
-
-      try {
-        window.localStorage.setItem(
-          PROFILE_STORAGE_KEY,
-          JSON.stringify({ email: payload.email } as StoredProfile)
-        )
-      } catch (error) {
-        console.warn('Unable to persist Google profile', error)
-      }
-    },
-    [clearGoogleButton]
-  )
-
-  // Profile restoration is handled in useState initializer to avoid setState in effects.
-
-  useEffect(() => {
-    if (!clientId) {
-      console.warn('Missing VITE_GOOGLE_CLIENT_ID environment variable for Google OAuth')
-      return
-    }
-
-    let cancelled = false
-
-    const initializeGoogle = () => {
-      if (cancelled || !window.google?.accounts?.id) {
-        return
-      }
-
-      clearGoogleButton()
-      window.google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleCredentialResponse,
-      })
-
-      setIsGoogleReady(true)
-      setScriptError(null)
-    }
-
-    const attachLoadHandler = (script: HTMLScriptElement) => {
-      const onLoad = () => {
-        if (cancelled) {
-          return
-        }
-
-        script.dataset.loaded = 'true'
-        initializeGoogle()
-      }
-
-      if (script.dataset.loaded === 'true') {
-        initializeGoogle()
-        return undefined
-      }
-
-      script.addEventListener('load', onLoad, { once: true })
-
-      return () => {
-        script.removeEventListener('load', onLoad)
-      }
-    }
-
-    if (window.google?.accounts?.id) {
-      initializeGoogle()
-      return () => {
-        cancelled = true
-      }
-    }
-
-    const existingScript = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null
-
-    let cleanupLoad: (() => void) | undefined
-
-    if (existingScript) {
-      cleanupLoad = attachLoadHandler(existingScript)
-    } else {
-      const script = document.createElement('script')
-      script.id = SCRIPT_ID
-      const lang = (navigator.language || 'en').split('-')[0]
-      script.src = `https://accounts.google.com/gsi/client?hl=${encodeURIComponent(lang)}`
-      script.async = true
-      script.defer = true
-      script.addEventListener('error', () => {
-        if (cancelled) return
-        setScriptError('Failed to load Google services. Check your connection and try again.')
-        const retries = Math.min(retryRef.current + 1, 3)
-        retryRef.current = retries
-        const backoff = Math.pow(2, retries) * 500
-        setTimeout(() => {
-          if (!document.getElementById(SCRIPT_ID)) {
-            document.head.appendChild(script)
-          } else {
-            // Force reload by replacing the element
-            document.getElementById(SCRIPT_ID)?.remove()
-            document.head.appendChild(script)
-          }
-        }, backoff)
-      })
-      cleanupLoad = attachLoadHandler(script)
-      document.head.appendChild(script)
-    }
-
-    return () => {
-      cancelled = true
-      cleanupLoad?.()
-      setIsGoogleReady(false)
-      clearGoogleButton()
-    }
-  }, [clearGoogleButton, clientId, handleCredentialResponse])
-
-  useEffect(() => {
-    if (!isGoogleReady || !buttonContainerRef.current || !window.google?.accounts?.id) {
-      return
-    }
-
-    const container = buttonContainerRef.current
-    if (!container) {
-      return
-    }
-
-    if (email) {
-      clearGoogleButton()
-      return
-    }
-
-    if (hasRenderedButton.current) {
-      return
-    }
-
-    clearGoogleButton()
-    window.google.accounts.id.renderButton(container, {
-      theme: theme.palette.mode === 'dark' ? 'filled_black' : 'filled_blue',
-      size: 'large',
-      type: 'standard',
-    })
-    window.google.accounts.id.prompt((n) => {
-      if (n.isNotDisplayed()) {
-        setPromptInfo(`Google One Tap not displayed: ${n.getDismissedReason?.() || 'unknown reason'}`)
-      } else if (n.isDismissedMoment()) {
-        setPromptInfo(`Google One Tap dismissed: ${n.getDismissedReason?.() || 'user dismissed'}`)
-      } else if (n.isDisplayed()) {
-        setPromptInfo(null)
-      }
-    })
-    hasRenderedButton.current = true
-
-    return () => {
-      clearGoogleButton()
-    }
-  }, [clearGoogleButton, email, isGoogleReady, theme.palette.mode])
-
-  const handleSignOut = () => {
-    try {
-      window.localStorage.removeItem(PROFILE_STORAGE_KEY)
-    } catch (error) {
-      console.warn('Unable to clear stored Google profile', error)
-    }
-
-    setEmail(null)
-    window.google?.accounts.id.disableAutoSelect()
-    window.google?.accounts.id.cancel()
-  }
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: (t) => t.palette.mode === 'dark' ? 'background.default' : '#f5f5f5', p: 3 }}>
-      <Container maxWidth="xs">
-        <Paper elevation={8} sx={{ borderRadius: 3, p: 3 }}>
-          <Stack spacing={2} alignItems="stretch">
-            <Typography component="h1" variant="h5" textAlign="center" fontWeight={600}>
-              Sign in
-            </Typography>
+    <Box
+      component="main"
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        bgcolor: (theme) => theme.palette.mode === 'dark' ? 'background.default' : '#f5f5f5',
+        p: 3,
+      }}
+    >
+      <Paper
+        elevation={8}
+        sx={{
+          width: '100%',
+          maxWidth: 360,
+          borderRadius: 3,
+          p: 3,
+        }}
+      >
+        <Stack spacing={2} alignItems="stretch">
+          <Typography component="h1" variant="h5" textAlign="center" fontWeight={600}>
+            Sign in
+          </Typography>
 
-            {!clientId && (
-              <Alert severity="info" sx={{ textAlign: 'center' }}>
-                Configure <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
-              </Alert>
-            )}
+          {!clientId && (
+            <Alert severity="info" sx={{ textAlign: 'center' }}>
+              Set <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
+            </Alert>
+          )}
 
-            {scriptError && (
-              <Alert severity="error" action={
-                <Button color="inherit" size="small" onClick={() => {
-                  setScriptError(null)
-                  const el = document.getElementById(SCRIPT_ID)
-                  if (el) el.remove()
-                  setIsGoogleReady(false)
-                  hasRenderedButton.current = false
-                }}>
+          {error && (
+            <Alert
+              severity="error"
+              action={
+                <Button color="inherit" size="small" onClick={retry}>
                   Retry
                 </Button>
-              }>
-                {scriptError}
-              </Alert>
-            )}
+              }
+            >
+              {error}
+            </Alert>
+          )}
 
-            {promptInfo && !email && (
-              <Alert severity="warning">{promptInfo}</Alert>
-            )}
-
-            {email ? (
-              <Stack spacing={2} alignItems="center">
-                <Stack spacing={0.5} alignItems="center">
-                  <Typography variant="overline" color="text.secondary">
-                    Signed in as
-                  </Typography>
-                  <Typography variant="subtitle1" fontWeight={500} textAlign="center" sx={{ wordBreak: 'break-all' }}>
-                    {email}
-                  </Typography>
-                </Stack>
-                <Button variant="contained" color="inherit" onClick={handleSignOut} sx={{ borderRadius: 99 }}>
-                  Sign out
-                </Button>
+          {email ? (
+            <Stack spacing={2} alignItems="center">
+              <Stack spacing={0.5} alignItems="center">
+                <Typography variant="overline" color="text.secondary">
+                  Signed in as
+                </Typography>
+                <Typography
+                  variant="subtitle1"
+                  fontWeight={500}
+                  textAlign="center"
+                  sx={{ wordBreak: 'break-all' }}
+                >
+                  {email}
+                </Typography>
               </Stack>
-            ) : (
-              <Box ref={buttonContainerRef} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 48 }} />
-            )}
-          </Stack>
-        </Paper>
-      </Container>
+              <Button variant="contained" onClick={signOut} sx={{ borderRadius: 999 }}>
+                Sign out
+              </Button>
+            </Stack>
+          ) : (
+            <Box
+              ref={buttonContainerRef}
+              sx={{
+                minHeight: 48,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {status === 'loading' && <CircularProgress size={20} />}
+            </Box>
+          )}
+        </Stack>
+      </Paper>
     </Box>
   )
 }
 
 export default App
-
-type StoredProfile = {
-  email: string
-}
-
-type JwtPayload = {
-  email?: string
-}
-
-function parseJwt(token: string): JwtPayload | null {
-  const base64Url = token.split('.')[1]
-  if (!base64Url) return null
-
-  try {
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
-        .join('')
-    )
-
-    return JSON.parse(jsonPayload)
-  } catch (error) {
-    console.error('Failed to parse JWT payload', error)
-    return null
-  }
-}
-
-const SCRIPT_ID = 'google-oauth'
-const PROFILE_STORAGE_KEY = 'google-profile'
-
-type CredentialResponse = {
-  credential: string
-  select_by?: string
-}
-
-type GoogleId = {
-  initialize(options: { client_id: string; callback: (response: CredentialResponse) => void }): void
-  renderButton(parent: HTMLElement, options: { theme?: string; size?: string; type?: string }): void
-  prompt(momentListener?: (notification: PromptMomentNotification) => void): void
-  disableAutoSelect(): void
-  cancel(): void
-}
-
-type GoogleAccounts = {
-  id: GoogleId
-}
-
-type GoogleNamespace = {
-  accounts: GoogleAccounts
-}
-
-type PromptMomentNotification = {
-  isDismissedMoment(): boolean
-  isDisplayed(): boolean
-  isNotDisplayed(): boolean
-  getDismissedReason(): string
-  getMomentType(): string
-}
-
-declare global {
-  interface Window {
-    google?: GoogleNamespace
-  }
-}
