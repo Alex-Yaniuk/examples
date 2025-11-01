@@ -7,6 +7,31 @@ function App() {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    try {
+      const storedProfile = window.localStorage.getItem(PROFILE_STORAGE_KEY)
+      if (!storedProfile) {
+        return
+      }
+
+      const profile: StoredProfile = JSON.parse(storedProfile)
+      if (profile?.email) {
+        setEmail(profile.email)
+      }
+    } catch (error) {
+      console.warn('Unable to restore stored Google profile', error)
+      try {
+        window.localStorage.removeItem(PROFILE_STORAGE_KEY)
+      } catch (cleanupError) {
+        console.warn('Unable to clear invalid stored Google profile', cleanupError)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
     if (!clientId) {
       console.warn('Missing VITE_GOOGLE_CLIENT_ID environment variable for Google OAuth')
       return
@@ -27,17 +52,31 @@ function App() {
           }
 
           const payload = parseJwt(credentialResponse.credential)
-          if (payload?.email) {
-            setEmail(payload.email)
+          if (!payload?.email) {
+            return
+          }
+
+          setEmail(payload.email)
+
+          try {
+            window.localStorage.setItem(
+              PROFILE_STORAGE_KEY,
+              JSON.stringify({ email: payload.email } as StoredProfile)
+            )
+          } catch (error) {
+            console.warn('Unable to persist Google profile', error)
           }
         },
       })
 
-      window.google.accounts.id.renderButton(buttonContainerRef.current, {
-        theme: 'outline',
-        size: 'large',
-        type: 'standard',
-      })
+      if (!email) {
+        window.google.accounts.id.renderButton(buttonContainerRef.current, {
+          theme: 'outline',
+          size: 'large',
+          type: 'standard',
+        })
+        window.google.accounts.id.prompt()
+      }
     }
 
     if (window.google) {
@@ -95,7 +134,19 @@ function App() {
         buttonContainerRef.current.innerHTML = ''
       }
     }
-  }, [clientId])
+  }, [clientId, email])
+
+  const handleSignOut = () => {
+    try {
+      window.localStorage.removeItem(PROFILE_STORAGE_KEY)
+    } catch (error) {
+      console.warn('Unable to clear stored Google profile', error)
+    }
+
+    setEmail(null)
+    window.google?.accounts.id.disableAutoSelect()
+    window.google?.accounts.id.cancel()
+  }
 
   return (
     <div className="app">
@@ -107,9 +158,14 @@ function App() {
           </p>
         )}
         {email ? (
-          <div className="details">
-            <span className="label">Signed in as</span>
-            <span className="email">{email}</span>
+          <div className="signed-in">
+            <div className="details">
+              <span className="label">Signed in as</span>
+              <span className="email">{email}</span>
+            </div>
+            <button type="button" className="sign-out" onClick={handleSignOut}>
+              Sign out
+            </button>
           </div>
         ) : (
           <div className="button-container" ref={buttonContainerRef} />
@@ -120,6 +176,10 @@ function App() {
 }
 
 export default App
+
+type StoredProfile = {
+  email: string
+}
 
 type JwtPayload = {
   email?: string
@@ -146,6 +206,7 @@ function parseJwt(token: string): JwtPayload | null {
 }
 
 const SCRIPT_ID = 'google-oauth'
+const PROFILE_STORAGE_KEY = 'google-profile'
 
 type CredentialResponse = {
   credential: string
@@ -155,6 +216,9 @@ type CredentialResponse = {
 type GoogleId = {
   initialize(options: { client_id: string; callback: (response: CredentialResponse) => void }): void
   renderButton(parent: HTMLElement, options: { theme?: string; size?: string; type?: string }): void
+  prompt(momentListener?: (notification: PromptMomentNotification) => void): void
+  disableAutoSelect(): void
+  cancel(): void
 }
 
 type GoogleAccounts = {
@@ -163,6 +227,14 @@ type GoogleAccounts = {
 
 type GoogleNamespace = {
   accounts: GoogleAccounts
+}
+
+type PromptMomentNotification = {
+  isDismissedMoment(): boolean
+  isDisplayed(): boolean
+  isNotDisplayed(): boolean
+  getDismissedReason(): string
+  getMomentType(): string
 }
 
 declare global {
