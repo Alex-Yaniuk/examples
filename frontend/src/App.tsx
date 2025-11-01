@@ -5,6 +5,7 @@ function App() {
   const [email, setEmail] = useState<string | null>(null)
   const [isGoogleReady, setIsGoogleReady] = useState(false)
   const buttonContainerRef = useRef<HTMLDivElement | null>(null)
+  const hasRenderedButton = useRef(false)
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
   const handleCredentialResponse = useCallback(
@@ -130,22 +131,35 @@ function App() {
   }, [clientId, handleCredentialResponse])
 
   useEffect(() => {
-    if (!isGoogleReady || email || !buttonContainerRef.current || !window.google?.accounts?.id) {
+    if (!isGoogleReady || !buttonContainerRef.current || !window.google?.accounts?.id) {
       return
     }
 
     const container = buttonContainerRef.current
 
-    if (container.childElementCount > 0) {
+    if (email) {
+      container.innerHTML = ''
+      hasRenderedButton.current = false
       return
     }
 
+    if (hasRenderedButton.current) {
+      return
+    }
+
+    container.innerHTML = ''
     window.google.accounts.id.renderButton(container, {
       theme: 'outline',
       size: 'large',
       type: 'standard',
     })
     window.google.accounts.id.prompt()
+    hasRenderedButton.current = true
+
+    return () => {
+      container.innerHTML = ''
+      hasRenderedButton.current = false
+    }
   }, [email, isGoogleReady])
 
   const handleSignOut = () => {
