@@ -17,6 +17,11 @@ jobs:
     defaults:
       run:
         working-directory: frontend
+    env:
+      VITE_STEAM_RETURN_URL: ${{ vars.VITE_STEAM_RETURN_URL || secrets.VITE_STEAM_RETURN_URL }}
+      VITE_STEAM_REALM: ${{ vars.VITE_STEAM_REALM || secrets.VITE_STEAM_REALM }}
+      VITE_STEAM_WEB_API_KEY: ${{ vars.VITE_STEAM_WEB_API_KEY || secrets.VITE_STEAM_WEB_API_KEY }}
+      VITE_STEAM_API_PROXY: ${{ vars.VITE_STEAM_API_PROXY || secrets.VITE_STEAM_API_PROXY }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
