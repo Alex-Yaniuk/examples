@@ -34,3 +34,5 @@ This repository is a Vite + React + TypeScript frontend using MUI. Follow these 
 - Do not commit secrets. Use `.env`; only expose client-side vars with the `VITE_` prefix (e.g., `VITE_GOOGLE_CLIENT_ID`).
 - `vite.config.ts` sets `base: '/examples/'`; verify asset paths when deploying to subpaths.
 
+## Testing
+Use playwright mcp to verify implemented changese
